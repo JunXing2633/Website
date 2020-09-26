@@ -1,0 +1,169 @@
+---
+title: Using Action Time to Predict Fire Loss
+author: "Jun Xing"
+date: '2020-09-26'
+slug: using-action-time-to-predict-fire-loss
+categories: ["R"]
+tags: ["R Markdown", "plot", "regression"]
+---
+### Abstract: 
+Estimation of fire loss can be laborious.In this paper, we explore the Fire Incidents dataset, which contains various information about fire incidents recorded by Fire Services Toronto from 2011 to 2019. We find that there exists a linear relationship between the annual average fire loss and annual average action time. Our finding has implications for claim budgeting and building risk models at insurance companies.
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+chooseCRANmirror(graphics=FALSE, ind=1)
+install.packages("opendatatoronto")
+install.packages("tidyverse")
+install.packages("dplyr")
+install.packages("visdat")
+install.packages("lubridate")
+install.packages("gridExtra")
+library(tidyverse)
+library(opendatatoronto)
+library(dplyr)
+library(visdat)
+library(lubridate)
+library(gridExtra)
+```
+
+```{r message=FALSE, include=FALSE}
+package <- show_package("64a26694-01dc-4ec3-aa87-ad8509604f50")
+resources <- list_package_resources("64a26694-01dc-4ec3-aa87-ad8509604f50")
+datastore_resources <- filter(resources, tolower(format) %in% c('csv', 'geojson'))
+data <- filter(datastore_resources, row_number()==1) %>% get_resource()
+```
+
+
+## I. Introduction 
+
+To come up with an accurate estimate of fire loss has been challenging for many insurance companies. According to he U.S. Fire Administration (USFA), "Fire loss is an estimation of the total loss to the structure and contents in terms of replacement in like kind and quantity". However, since many of the factors can't be quantified at scene, specialists at insurance companies are provided with guidelines rather than fixed formulas. 
+
+In this report, the objective is to explore the feasibility of using annual average action time to predict annual average fire loss based on a simply linear regression model. 
+
+## II. Data Source Discussion 
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+selected.data <- data %>%
+  select(estimate_loss=Estimated_Dollar_Loss,
+         alarm.time=TFS_Alarm_Time, 
+         fire_undercontrol.time = Fire_Under_Control_Time)
+selected.data$year=as.character(as.numeric(format(as.Date(selected.data$alarm.time),'%Y')))
+selected.data$action.time = as.numeric(as_datetime(selected.data$fire_undercontrol.time)-as_datetime(selected.data$alarm.time))/60
+
+```
+
+The source of the data is from a dataset listed on the City of Toronto's Open Data Portal.
+The dataset is published by Fire Services Toronto and refreshed annually. It provides fire incidents information similar to what is reported to Ontario Fire Marshal. Also, the dataset used for the following analysis was last updated on September 21, 2020, which is 3 days before this analysis. Therefore, although original data gathering method is not provided, this dataset can be assumed quite reliable. 
+
+For the purpose of this study, 3 features from the original dataset are extracted, and they are "Estimated_Dollar_Loss","TFS_Alarm_Time" and "Fire_Under_Control_Time". "Estimated_Dollar_Loss" is the estimated fire loss provided by specialists, "TFS_Alarm_Time" is the timestamp of when Toronto Fire Services was notified of the incident, and "Fire_Under_Control_Time" is the timestamp when fire is under control. 
+
+In the following analysis, "fire loss (in $)" is used to represent "Estimated_Dollar_Loss", and it is our response variable or variable of interest. "Action time (in minutes)" is measured as the difference in time between "Fire_Under_Control_Time" and "TFS_Alarm_Time", and it is our explanatory variable or independent variable.  
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+selected.data<-selected.data%>% 
+  filter(!is.na(estimate_loss))
+selected.data<-selected.data %>% 
+  filter(estimate_loss>0)
+vis_dat(selected.data)
+```
+
+## III. Exploratory Data Analysis
+
+As per the dataset last updated on September 21,2020, there are total of 17,536 observations of fire incidents recorded. 
+After removing missing values, there are  13,571 observations of fire incidents with fire loss greater than 0 dollar available for analysis. Based on the plot below, approximately 1550 fire incidents in each year between 2011 to 2018. However, only 835 fire incidents are available in 2019. Quite few observations in 2019 are filtered out during data cleansing stage because their estimate fire loss are missing. We can assume that Fire Service Toronto is still in the process of gathering those information as it usually takes long time to calculate the fire loss.
+Based on the plots below, although number of fire incidents with fire loss great than 0 is approximately uniform from 2011 to 2019, it seems that the total fire loss in each year is increasing. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+table1 = as.data.frame(table(selected.data$year))
+t1<-table1 %>%
+  ggplot(aes(x=Var1,y=Freq)) + 
+  geom_col(colour = "black",fill = "blue",alpha=.2)+
+  geom_text(aes(label=Freq),position = position_stack(vjust = 0.7),size=3)+
+  labs(title = "Fire Incidents in Each Year",x = "Year",y = "# of Observations with Fire Loss>0")+ylim(0,3000)
+
+t2_data<-aggregate(x=selected.data[,c(1)], by = list(Year=selected.data$year), FUN=sum)
+t2<-ggplot(data=t2_data, aes(x=Year, y=estimate_loss, group=1)) +
+  geom_line()+
+  geom_point()+
+  labs(title = "Total Fire Loss in Each Year",x = "Year",y = "Total Fire Loss($)")
+grid.arrange(t1, t2, ncol=2)
+```
+
+Below is a table showing numerical summary of the fire loss($) in each year. 
+over the years, it seems that most of fire incidents had a fire loss between 500 dollars to 25000 dollars.
+
+Some extreme large values occurred in 2011, 2017, and 2019. Those are the data points worth investigation and confirmation before inferences. 
+Extreme values had larger influence on the mean and standard deviation of fire loss in 2019 because sample size in 2019 is relatively smaller than that from other years.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+selected.data %>% 
+  group_by(year) %>% 
+  summarize(minimum = min(estimate_loss),
+            Quantile1 = quantile(estimate_loss, 0.25),
+            mean = mean(estimate_loss),
+            standard.deviation = sd(estimate_loss),
+            Quantile3 = quantile(estimate_loss, 0.75),
+            maximum = max(estimate_loss))
+```
+Below is a table showing numerical summary of the action time(minutes) in each year. 
+over the years, it seems that most of fire incidents had a action time between 7 minutes to 20 minutes. That means as soon as fire alarm was triggered in Toronto, most of time the fire was extinguished within 20 minutes.
+Again, it seems that the extreme values in 2019 drove mean and standard deviation unusually high in that year. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+selected.data %>% 
+  group_by(year) %>% 
+  summarize(minimum = min(action.time),
+            Quantile1 = quantile(action.time, 0.25),
+            mean = mean(action.time),
+            standard.deviation = sd(action.time),
+            Quantile3 = quantile(action.time, 0.75),
+            maximum = max(action.time))
+```
+A scatterplot of annual average fire loss versus annual average action time is shown below.
+It appears that there is linear association between the two variables.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+yearly_data<-aggregate(x=selected.data[,c(1,5)], by = list(Year=selected.data$year), FUN=mean)
+ggplot(yearly_data,aes(x=action.time,y=estimate_loss))+
+  geom_point()+
+  labs(title="Scatterplot of annual average fire loss VS annual average action time",x="Average action time(minutes)",y="Annual Average fire loss($)")+
+  geom_smooth(method=lm)
+
+```
+
+One of the assumption to check before using simply linear regression model is normality of response variable. In this case, we want to use normal qq plot to check the normality of annual average fire loss.
+By inspection, most of points are close to the straight line. Although there is one point that is far from straight line, it is acceptable because this unusual mean is the result of extreme values in small sample in 2019. 
+Therefore, we can assume that annual average fire loss follows a normal distribution so does the error term in simple linear regression model. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+ggplot(yearly_data)+                           #plot normal qq plot of action variable                          
+    stat_qq(aes(sample=estimate_loss))+
+    stat_qq_line(aes(sample=estimate_loss))+
+    labs(title="Normal QQ plot",x="theoretical",y="Annual average fire loss($)")
+```
+
+## IV. Model and Discussion
+
+```{r}
+slr <- lm(yearly_data$estimate_loss~yearly_data$action.time)            #fit a linear model between 
+summary(slr)
+```
+Based on the summary above, we can get a best fitted line  $\hat y= -127319 + 8696x$.
+It suggests that for every 1 minutes increase in the annual average action time, the expectation of annual average fire loss will increase 8,696 dollars. 
+Considering the significant test with 5% significance level for the slope parameter, the p-value is 9.3e-05 for 2 sided hypothesis test(Ho:B1=0). Since p-value is much smaller than 5%, we have strong evidence to reject Ho. So we can conclude that there exists linear association between annual average fire loss and annual average action time. 
+
+## V. Weaknesses and Next Steps
+One of the limitation of this analysis is that the lurking variables are not considered. For example, height of place where the fire incidence occur also have impact on the fire loss. Fire at higher floor may require longer rescue setup, leading to longer action time and more damage.
+Another weakness of this analysis is the uneven sample size in different years. As mentioned above, since year of 2019 record had many missing values of fire loss, the extreme values then drove a unusual mean in the smaller sample. 
+In Conclusion, we should investigate and confirm the extreme values of fire loss and action time, gets more observations in 2019, and considering lurking variables in the next analysis. 
+
+## VI. Code
+All codes are available at https://github.com/JunXing2633/website. 
+
+## VII. Reference
+1. Fire Services Toronto (2020).Fire Incidents.R package version 0.1.3 Retrieved 2020-9-24 from       
+        https://open.toronto.ca/dataset/fire-incidents/
+2. U.S. Fire Administration (2020).NFIRSGram: calculating fire loss. Retrieved 2020-9-24 from
+        https://www.usfa.fema.gov/data/nfirs/support/nfirsgrams/nfirsgram_calculating_fireloss.html
+3. S.Mailvaganam, D.Yung and M.Prencipe (1992) Ontario Fire Loss Statistics for the Risk-Cost Assessment Model.
+    Retrieved 2020-9-20 from http://www.cfaa.ca/Files/flash/EDUC/FIRE%20ALARM%20ARTICLES%20AND%20RESEARCH/ontario%20fire%20loss%20stats%20ir622.pdf

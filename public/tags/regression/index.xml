@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>regression on A Hugo website</title>
+    <link>/tags/regression/</link>
+    <description>Recent content in regression on A Hugo website</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>en-us</language>
+    <lastBuildDate>Sat, 26 Sep 2020 00:00:00 +0000</lastBuildDate><atom:link href="/tags/regression/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Using Action Time to Predict Fire Loss</title>
+      <link>/2020/09/26/using-action-time-to-predict-fire-loss/</link>
+      <pubDate>Sat, 26 Sep 2020 00:00:00 +0000</pubDate>
+      
+      <guid>/2020/09/26/using-action-time-to-predict-fire-loss/</guid>
+      <description>Abstract: Estimation of fire loss can be laborious.In this paper, we explore the Fire Incidents dataset, which contains various information about fire incidents recorded by Fire Services Toronto from 2011 to 2019. We find that there exists a linear relationship between the annual average fire loss and annual average action time. Our finding has implications for claim budgeting and building risk models at insurance companies.
+ I. Introduction To come up with an accurate estimate of fire loss has been challenging for many insurance companies.</description>
+    </item>
+    
+  </channel>
+</rss>
